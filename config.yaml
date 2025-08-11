@@ -29,6 +29,9 @@ system:
   # Simulación de sensores
   simulate_sensors: true
   
+  # Detección real de WiFi (para Raspberry Pi)
+  detect_real_wifi: true
+  
   # Intervalos de actualización (segundos)
   sensor_update_interval: 5.0
   log_cleanup_interval: 300  # 5 minutos

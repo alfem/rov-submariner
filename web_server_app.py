@@ -13,6 +13,8 @@ import time
 import json
 import yaml
 import os
+import subprocess
+import re
 from datetime import datetime
 import logging
 
@@ -65,6 +67,42 @@ system_status = {
 
 # Lista de logs del sistema
 system_logs = []
+
+def get_wifi_signal_strength():
+    """Obtiene la fuerza de señal WiFi actual en Raspberry Pi"""
+    try:
+        # Método 1: Usar iwconfig
+        result = subprocess.run(['iwconfig'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            # Buscar la línea con información de señal
+            for line in result.stdout.split('\n'):
+                if 'Signal level=' in line:
+                    # Extraer valor de señal (formato: Signal level=-XX dBm)
+                    match = re.search(r'Signal level=(-?\d+)', line)
+                    if match:
+                        signal_dbm = int(match.group(1))
+                        # Convertir dBm a porcentaje (aproximado)
+                        # -30 dBm = 100%, -90 dBm = 0%
+                        percentage = max(0, min(100, (signal_dbm + 90) * 100 // 60))
+                        return percentage
+        
+        # Método 2: Leer /proc/net/wireless si iwconfig falla
+        with open('/proc/net/wireless', 'r') as f:
+            lines = f.readlines()
+            if len(lines) > 2:  # Saltar las líneas de cabecera
+                data = lines[2].split()
+                if len(data) >= 3:
+                    # El tercer campo es la calidad de señal
+                    quality = float(data[2])
+                    # Convertir calidad a porcentaje (asumiendo escala 0-70)
+                    percentage = min(100, int((quality / 70) * 100))
+                    return percentage
+    
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, IndexError, ValueError) as e:
+        logger.warning(f"No se pudo obtener señal WiFi real: {e}")
+    
+    # Fallback: retornar valor simulado
+    return None
 
 def add_log(message, level="INFO"):
     """Añade un log al sistema"""
@@ -179,20 +217,30 @@ class CameraStream:
 # Instancia del stream de cámara
 camera_stream = CameraStream()
 
-# Thread para simular cambios en el sistema
-def simulate_system_changes():
-    """Simula cambios en WiFi y batería"""
-    if not config['system']['simulate_sensors']:
-        return
-        
+# Thread para actualizar el estado del sistema
+def update_system_status():
+    """Actualiza WiFi real y simula cambios en batería"""
     import random
     interval = config['system']['sensor_update_interval']
     
     while True:
         time.sleep(interval)
-        # Simular cambios en WiFi y batería
-        system_status['wifi_strength'] = max(10, min(100, system_status['wifi_strength'] + random.randint(-5, 5)))
-        system_status['battery'] = max(0, min(100, system_status['battery'] + random.randint(-2, 1)))
+        
+        # Obtener señal WiFi real si está habilitado
+        if config['system'].get('detect_real_wifi', True):
+            real_wifi = get_wifi_signal_strength()
+            if real_wifi is not None:
+                system_status['wifi_strength'] = real_wifi
+            elif config['system']['simulate_sensors']:
+                # Solo simular WiFi si no se puede obtener valor real
+                system_status['wifi_strength'] = max(10, min(100, system_status['wifi_strength'] + random.randint(-5, 5)))
+        elif config['system']['simulate_sensors']:
+            # Simular WiFi si la detección real está deshabilitada
+            system_status['wifi_strength'] = max(10, min(100, system_status['wifi_strength'] + random.randint(-5, 5)))
+        
+        # Simular cambios en batería si está habilitado
+        if config['system']['simulate_sensors']:
+            system_status['battery'] = max(0, min(100, system_status['battery'] + random.randint(-2, 1)))
         
         # Enviar actualización a clientes
         socketio.emit('system_status', {
@@ -205,7 +253,8 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 @socketio.on('connect')
-def handle_connect():
+def handle_connect(auth):
+    from flask import request
     logger.info(f"Cliente conectado: {request.sid}")
     emit('system_status', {
         'wifi_strength': system_status['wifi_strength'],
@@ -278,7 +327,7 @@ HTML_TEMPLATE = '''
         
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #87ceeb 0%, #b0e0e6 100%);
             min-height: 100vh;
         }
         
@@ -880,12 +929,11 @@ if __name__ == '__main__':
     # Iniciar cámara
     camera_stream.start()
     
-    # Iniciar threads
-    if config['system']['simulate_sensors']:
-        system_thread = threading.Thread(target=simulate_system_changes)
-        system_thread.daemon = True
-        system_thread.start()
-        add_log("Simulación de sensores activada")
+    # Iniciar thread de actualización del sistema
+    system_thread = threading.Thread(target=update_system_status)
+    system_thread.daemon = True
+    system_thread.start()
+    add_log("Monitor de sistema iniciado")
     
     video_thread = threading.Thread(target=video_stream_thread)
     video_thread.daemon = True
@@ -898,7 +946,7 @@ if __name__ == '__main__':
     add_log(f"Servidor iniciado en http://{host}:{port}")
     
     try:
-        socketio.run(app, host=host, port=port, debug=debug)
+        socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
         add_log("Cerrando servidor...")
         camera_stream.stop()
