@@ -1,0 +1,78 @@
+# Configuración del servidor ROV
+server:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  secret_key: "your-secret-key-change-this-in-production"
+
+# Configuración de video
+video:
+  # Fuente de video: 'camera', 'url', 'dummy'
+  source: "camera"
+  
+  # URL del stream de video (para source: 'url')
+  stream_url: "rtsp://192.168.1.100:554/stream"
+  
+  # Índice de cámara local (para source: 'camera')
+  camera_index: 0
+  
+  # Configuración de calidad
+  fps: 30
+  stream_fps: 15
+  jpeg_quality: 70
+  
+  # Resolución (ancho, alto) - dejar en null para auto
+  resolution: [640, 480]
+
+# Configuración de sistema
+system:
+  # Simulación de sensores
+  simulate_sensors: true
+  
+  # Intervalos de actualización (segundos)
+  sensor_update_interval: 5.0
+  log_cleanup_interval: 300  # 5 minutos
+  
+  # Límites de logs
+  max_logs: 100
+  
+  # Valores iniciales
+  initial_wifi_strength: 85
+  initial_battery: 67
+
+# Configuración de controles
+controls:
+  # Joystick
+  joystick:
+    max_radius: 55
+    deadzone: 0.05
+  
+  # Slider de profundidad
+  depth:
+    min_value: 0
+    max_value: 100
+    initial_value: 0
+  
+  # Otros controles
+  light_initial_state: false
+
+# Configuración de logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+# Configuración de red
+network:
+  cors_allowed_origins: "*"
+  socketio_async_mode: "threading"
+  
+# Configuración avanzada
+advanced:
+  # Timeout para conexión de cámara
+  camera_timeout: 5.0
+  
+  # Reintentos de conexión
+  camera_retry_attempts: 3
+  
+  # Buffer de video frames
+  frame_buffer_size: 2
