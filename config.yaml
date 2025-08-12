@@ -1,81 +1,81 @@
-# Configuración del servidor ROV
+# ROV server configuration
 server:
   host: "0.0.0.0"
   port: 5000
   debug: false
   secret_key: "your-secret-key-change-this-in-production"
 
-# Configuración de video
+# Video configuration
 video:
-  # Fuente de video: 'camera', 'url', 'dummy'
+  # Video source: 'camera', 'url', 'dummy'
   source: "camera"
   
-  # URL del stream de video (para source: 'url')
+  # Video stream URL (for source: 'url')
   stream_url: "rtsp://192.168.1.100:554/stream"
   
-  # Índice de cámara local (para source: 'camera')
+  # Local camera index (for source: 'camera')
   camera_index: 0
   
-  # Configuración de calidad
+  # Quality configuration
   fps: 30
   stream_fps: 15
   jpeg_quality: 70
   
-  # Resolución (ancho, alto) - dejar en null para auto
+  # Resolution (width, height) - leave null for auto
   resolution: [640, 480]
 
-# Configuración de sistema
+# System configuration
 system:
-  # Simulación de sensores
+  # Sensor simulation
   simulate_sensors: true
   
-  # Detección real de WiFi (para Raspberry Pi)
+  # Real WiFi detection (for Raspberry Pi)
   detect_real_wifi: true
   
-  # Intervalos de actualización (segundos)
+  # Update intervals (seconds)
   sensor_update_interval: 5.0
-  log_cleanup_interval: 300  # 5 minutos
+  log_cleanup_interval: 300  # 5 minutes
   
-  # Límites de logs
+  # Log limits
   max_logs: 100
   
-  # Valores iniciales
+  # Initial values
   initial_wifi_strength: 85
   initial_battery: 67
 
-# Configuración de controles
+# Controls configuration
 controls:
   # Joystick
   joystick:
     max_radius: 55
     deadzone: 0.05
   
-  # Slider de profundidad
+  # Depth slider
   depth:
     min_value: 0
     max_value: 100
     initial_value: 0
   
-  # Otros controles
+  # Other controls
   light_initial_state: false
 
-# Configuración de logging
+# Logging configuration
 logging:
   level: "INFO"  # DEBUG, INFO, WARNING, ERROR
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   
-# Configuración de red
+# Network configuration
 network:
   cors_allowed_origins: "*"
   socketio_async_mode: "threading"
   
-# Configuración avanzada
+# Advanced configuration
 advanced:
-  # Timeout para conexión de cámara
+  # Camera connection timeout
   camera_timeout: 5.0
   
-  # Reintentos de conexión
+  # Connection retries
   camera_retry_attempts: 3
   
-  # Buffer de video frames
+  # Video frame buffer
   frame_buffer_size: 2

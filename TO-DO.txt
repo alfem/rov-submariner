@@ -1,4 +1,4 @@
-- [ ] Change comment to english
+- [x] Change comment to english
 - [ ] Extract html/css from web_interface_app.py to files
 - [ ] Add configuration parameter for photo folder
 - [ ] Implement photo takes

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Servidor web con WebSockets para control remoto con interfaz responsiva
-Requiere: pip install flask flask-socketio opencv-python pyyaml
+Web server with WebSockets for remote control with responsive interface
+Requires: pip install flask flask-socketio opencv-python pyyaml
 """
 
 from flask import Flask, render_template_string
@@ -18,15 +18,15 @@ import re
 from datetime import datetime
 import logging
 
-# Cargar configuración
+# Load configuration
 def load_config(config_file='config.yaml'):
-    """Carga la configuración desde archivo YAML"""
+    """Load configuration from YAML file"""
     try:
         with open(config_file, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
-        logger.error(f"Archivo de configuración {config_file} no encontrado")
-        # Retornar configuración por defecto
+        logger.error(f"Configuration file {config_file} not found")
+        # Return default configuration
         return {
             'server': {'host': '0.0.0.0', 'port': 5000, 'debug': False, 'secret_key': 'default-key'},
             'video': {'source': 'camera', 'camera_index': 0, 'fps': 30, 'stream_fps': 15, 'jpeg_quality': 70},
@@ -38,13 +38,13 @@ def load_config(config_file='config.yaml'):
             'network': {'cors_allowed_origins': '*', 'socketio_async_mode': 'threading'}
         }
     except Exception as e:
-        logger.error(f"Error cargando configuración: {e}")
+        logger.error(f"Error loading configuration: {e}")
         return {}
 
-# Cargar configuración
+# Load configuration
 config = load_config()
 
-# Configuración de logging
+# Logging configuration
 log_level = getattr(logging, config.get('logging', {}).get('level', 'INFO').upper())
 logging.basicConfig(level=log_level)
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ socketio = SocketIO(app,
                    cors_allowed_origins=config['network']['cors_allowed_origins'], 
                    async_mode=config['network']['socketio_async_mode'])
 
-# Variables globales para el estado del sistema
+# Global variables for system status
 system_status = {
     'wifi_strength': config['system']['initial_wifi_strength'],
     'battery': config['system']['initial_battery'],
@@ -65,47 +65,47 @@ system_status = {
     'camera_active': True
 }
 
-# Lista de logs del sistema
+# System logs list
 system_logs = []
 
 def get_wifi_signal_strength():
-    """Obtiene la fuerza de señal WiFi actual en Raspberry Pi"""
+    """Get current WiFi signal strength on Raspberry Pi"""
     try:
-        # Método 1: Usar iwconfig
+        # Method 1: Use iwconfig
         result = subprocess.run(['iwconfig'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            # Buscar la línea con información de señal
+            # Search for line with signal information
             for line in result.stdout.split('\n'):
                 if 'Signal level=' in line:
-                    # Extraer valor de señal (formato: Signal level=-XX dBm)
+                    # Extract signal value (format: Signal level=-XX dBm)
                     match = re.search(r'Signal level=(-?\d+)', line)
                     if match:
                         signal_dbm = int(match.group(1))
-                        # Convertir dBm a porcentaje (aproximado)
+                        # Convert dBm to percentage (approximate)
                         # -30 dBm = 100%, -90 dBm = 0%
                         percentage = max(0, min(100, (signal_dbm + 90) * 100 // 60))
                         return percentage
         
-        # Método 2: Leer /proc/net/wireless si iwconfig falla
+        # Method 2: Read /proc/net/wireless if iwconfig fails
         with open('/proc/net/wireless', 'r') as f:
             lines = f.readlines()
-            if len(lines) > 2:  # Saltar las líneas de cabecera
+            if len(lines) > 2:  # Skip header lines
                 data = lines[2].split()
                 if len(data) >= 3:
-                    # El tercer campo es la calidad de señal
+                    # Third field is signal quality
                     quality = float(data[2])
-                    # Convertir calidad a porcentaje (asumiendo escala 0-70)
+                    # Convert quality to percentage (assuming 0-70 scale)
                     percentage = min(100, int((quality / 70) * 100))
                     return percentage
     
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, IndexError, ValueError) as e:
-        logger.warning(f"No se pudo obtener señal WiFi real: {e}")
+        logger.warning(f"Could not get real WiFi signal: {e}")
     
-    # Fallback: retornar valor simulado
+    # Fallback: return simulated value
     return None
 
 def add_log(message, level="INFO"):
-    """Añade un log al sistema"""
+    """Add a log entry to the system"""
     timestamp = datetime.now().strftime("%H:%M:%S")
     log_entry = {
         'timestamp': timestamp,
@@ -114,10 +114,10 @@ def add_log(message, level="INFO"):
     }
     system_logs.append(log_entry)
     max_logs = config['system']['max_logs']
-    if len(system_logs) > max_logs:  # Mantener solo los últimos N logs
+    if len(system_logs) > max_logs:  # Keep only the last N logs
         system_logs.pop(0)
     
-    # Enviar log a todos los clientes conectados
+    # Send log to all connected clients
     socketio.emit('new_log', log_entry)
 
 class CameraStream:
@@ -129,41 +129,41 @@ class CameraStream:
         self.video_config = config['video']
         
     def start(self):
-        """Inicia el stream de cámara"""
+        """Start camera stream"""
         try:
             source = self.video_config['source']
             
             if source == 'camera':
                 camera_index = self.video_config['camera_index']
                 self.camera = cv2.VideoCapture(camera_index)
-                add_log(f"Intentando conectar cámara índice: {camera_index}")
+                add_log(f"Attempting to connect camera index: {camera_index}")
                 
             elif source == 'url':
                 stream_url = self.video_config['stream_url']
                 self.camera = cv2.VideoCapture(stream_url)
-                add_log(f"Intentando conectar stream URL: {stream_url}")
+                add_log(f"Attempting to connect stream URL: {stream_url}")
                 
             elif source == 'dummy':
                 self.camera = None
-                add_log("Modo dummy activado")
+                add_log("Dummy mode activated")
             
-            # Configurar cámara si está disponible
+            # Configure camera if available
             if self.camera and self.camera.isOpened():
-                # Configurar resolución si está especificada
+                # Configure resolution if specified
                 if self.video_config.get('resolution'):
                     width, height = self.video_config['resolution']
                     self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
                     self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
                 
-                # Configurar FPS
+                # Configure FPS
                 fps = self.video_config['fps']
                 self.camera.set(cv2.CAP_PROP_FPS, fps)
                 
-                add_log(f"Cámara iniciada correctamente - Fuente: {source}")
+                add_log(f"Camera started successfully - Source: {source}")
             else:
-                # Si no hay cámara física, crear frame dummy
+                # If no physical camera, create dummy frame
                 self.create_dummy_frame()
-                add_log(f"No se pudo conectar a la fuente '{source}', usando frame dummy", "WARNING")
+                add_log(f"Could not connect to source '{source}', using dummy frame", "WARNING")
             
             self.running = True
             self.thread = threading.Thread(target=self._capture_frames)
@@ -171,11 +171,11 @@ class CameraStream:
             self.thread.start()
             
         except Exception as e:
-            add_log(f"Error al iniciar cámara: {str(e)}", "ERROR")
+            add_log(f"Error starting camera: {str(e)}", "ERROR")
             self.create_dummy_frame()
     
     def create_dummy_frame(self):
-        """Crea un frame dummy para testing"""
+        """Create a dummy frame for testing"""
         import numpy as np
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         cv2.putText(frame, "Camera Stream", (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
@@ -184,7 +184,7 @@ class CameraStream:
             self.frame = frame
     
     def _capture_frames(self):
-        """Captura frames continuamente"""
+        """Capture frames continuously"""
         fps_delay = 1 / self.video_config['fps']
         while self.running:
             if self.camera and self.camera.isOpened():
@@ -199,7 +199,7 @@ class CameraStream:
             time.sleep(fps_delay)
     
     def get_frame_base64(self):
-        """Obtiene el frame actual en base64"""
+        """Get current frame in base64"""
         with self.lock:
             if self.frame is not None:
                 quality = self.video_config['jpeg_quality']
@@ -209,40 +209,40 @@ class CameraStream:
         return None
     
     def stop(self):
-        """Detiene el stream"""
+        """Stop the stream"""
         self.running = False
         if self.camera:
             self.camera.release()
 
-# Instancia del stream de cámara
+# Camera stream instance
 camera_stream = CameraStream()
 
-# Thread para actualizar el estado del sistema
+# Thread to update system status
 def update_system_status():
-    """Actualiza WiFi real y simula cambios en batería"""
+    """Update real WiFi and simulate battery changes"""
     import random
     interval = config['system']['sensor_update_interval']
     
     while True:
         time.sleep(interval)
         
-        # Obtener señal WiFi real si está habilitado
+        # Get real WiFi signal if enabled
         if config['system'].get('detect_real_wifi', True):
             real_wifi = get_wifi_signal_strength()
             if real_wifi is not None:
                 system_status['wifi_strength'] = real_wifi
             elif config['system']['simulate_sensors']:
-                # Solo simular WiFi si no se puede obtener valor real
+                # Only simulate WiFi if real value cannot be obtained
                 system_status['wifi_strength'] = max(10, min(100, system_status['wifi_strength'] + random.randint(-5, 5)))
         elif config['system']['simulate_sensors']:
-            # Simular WiFi si la detección real está deshabilitada
+            # Simulate WiFi if real detection is disabled
             system_status['wifi_strength'] = max(10, min(100, system_status['wifi_strength'] + random.randint(-5, 5)))
         
-        # Simular cambios en batería si está habilitado
+        # Simulate battery changes if enabled
         if config['system']['simulate_sensors']:
             system_status['battery'] = max(0, min(100, system_status['battery'] + random.randint(-2, 1)))
         
-        # Enviar actualización a clientes
+        # Send update to clients
         socketio.emit('system_status', {
             'wifi_strength': system_status['wifi_strength'],
             'battery': system_status['battery']
@@ -255,7 +255,7 @@ def index():
 @socketio.on('connect')
 def handle_connect(auth):
     from flask import request
-    logger.info(f"Cliente conectado: {request.sid}")
+    logger.info(f"Client connected: {request.sid}")
     emit('system_status', {
         'wifi_strength': system_status['wifi_strength'],
         'battery': system_status['battery'],
@@ -263,12 +263,12 @@ def handle_connect(auth):
         'light': system_status['light']
     })
     emit('logs', system_logs)
-    add_log("Cliente conectado")
+    add_log("Client connected")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    logger.info(f"Cliente desconectado: {request.sid}")
-    add_log("Cliente desconectado")
+    logger.info(f"Client disconnected: {request.sid}")
+    add_log("Client disconnected")
 
 @socketio.on('joystick_move')
 def handle_joystick(data):
@@ -278,18 +278,18 @@ def handle_joystick(data):
 @socketio.on('depth_change')
 def handle_depth(data):
     system_status['depth'] = data['value']
-    add_log(f"Depth cambiado a: {data['value']}")
+    add_log(f"Depth changed to: {data['value']}")
 
 @socketio.on('light_toggle')
 def handle_light():
     system_status['light'] = not system_status['light']
     status = "ON" if system_status['light'] else "OFF"
-    add_log(f"Luz {status}")
+    add_log(f"Light {status}")
     emit('light_status', {'status': system_status['light']}, broadcast=True)
 
 @socketio.on('take_photo')
 def handle_photo():
-    add_log("Foto capturada", "SUCCESS")
+    add_log("Photo captured", "SUCCESS")
     emit('photo_taken', {'timestamp': datetime.now().isoformat()})
 
 @socketio.on('get_frame')
@@ -298,7 +298,7 @@ def handle_get_frame():
     if frame:
         emit('video_frame', {'frame': frame})
 
-# Thread para enviar frames de video
+# Thread to send video frames
 def video_stream_thread():
     stream_fps = config['video']['stream_fps']
     delay = 1 / stream_fps
@@ -312,11 +312,11 @@ def video_stream_thread():
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Remoto</title>
+    <title>Remote Control</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
     <style>
         * {
@@ -740,13 +740,13 @@ HTML_TEMPLATE = '''
         let isDragging = false;
         let joystickCenter = {x: 0, y: 0};
         
-        // Inicialización
+        // Initialization
         document.addEventListener('DOMContentLoaded', function() {
             initializeJoystick();
             setupDepthSlider();
         });
         
-        // Manejo de pestañas
+        // Tab handling
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -755,7 +755,7 @@ HTML_TEMPLATE = '''
             document.getElementById(tabName).classList.add('active');
         }
         
-        // Inicializar joystick
+        // Initialize joystick
         function initializeJoystick() {
             const joystick = document.getElementById('joystick');
             const knob = document.getElementById('joystickKnob');
@@ -772,7 +772,7 @@ HTML_TEMPLATE = '''
             document.addEventListener('mouseup', stopDrag);
             document.addEventListener('touchend', stopDrag);
             
-            // Recalcular centro en resize
+            // Recalculate center on resize
             window.addEventListener('resize', () => {
                 const rect = joystick.getBoundingClientRect();
                 joystickCenter = {
@@ -835,7 +835,7 @@ HTML_TEMPLATE = '''
             socket.emit('joystick_move', {x: 0, y: 0});
         }
         
-        // Configurar slider de profundidad
+        // Configure depth slider
         function setupDepthSlider() {
             const slider = document.getElementById('depthSlider');
             slider.addEventListener('input', function() {
@@ -846,19 +846,19 @@ HTML_TEMPLATE = '''
             });
         }
         
-        // Botón de luz
+        // Light button
         function toggleLight() {
             socket.emit('light_toggle');
         }
         
-        // Botón de foto
+        // Photo button
         function takePhoto() {
             socket.emit('take_photo');
         }
         
-        // Eventos de Socket.IO
+        // Socket.IO events
         socket.on('connect', function() {
-            console.log('Conectado al servidor');
+            console.log('Connected to server');
         });
         
         socket.on('system_status', function(data) {
@@ -902,7 +902,7 @@ HTML_TEMPLATE = '''
         });
         
         socket.on('photo_taken', function(data) {
-            alert('¡Foto capturada!');
+            alert('Photo captured!');
         });
         
         function addLogEntry(log) {
@@ -923,17 +923,17 @@ HTML_TEMPLATE = '''
 '''
 
 if __name__ == '__main__':
-    add_log("Iniciando servidor...")
-    add_log(f"Configuración cargada: Video={config['video']['source']}, Puerto={config['server']['port']}")
+    add_log("Starting server...")
+    add_log(f"Configuration loaded: Video={config['video']['source']}, Port={config['server']['port']}")
     
-    # Iniciar cámara
+    # Start camera
     camera_stream.start()
     
-    # Iniciar thread de actualización del sistema
+    # Start system update thread
     system_thread = threading.Thread(target=update_system_status)
     system_thread.daemon = True
     system_thread.start()
-    add_log("Monitor de sistema iniciado")
+    add_log("System monitor started")
     
     video_thread = threading.Thread(target=video_stream_thread)
     video_thread.daemon = True
@@ -943,10 +943,10 @@ if __name__ == '__main__':
     port = config['server']['port']
     debug = config['server']['debug']
     
-    add_log(f"Servidor iniciado en http://{host}:{port}")
+    add_log(f"Server started at http://{host}:{port}")
     
     try:
         socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
-        add_log("Cerrando servidor...")
+        add_log("Closing server...")
         camera_stream.stop()
