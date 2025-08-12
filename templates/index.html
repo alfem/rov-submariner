@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Control</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="tab-container">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('control')">Control</button>
+                <button class="tab" onclick="switchTab('system')">System</button>
+                <button class="tab" onclick="switchTab('log')">Log</button>
+            </div>
+            
+            <div id="control" class="tab-content active">
+                <div class="status-indicators">
+                    <div class="indicator">
+                        <div class="indicator-icon">📶</div>
+                        <div class="indicator-text">
+                            <div class="indicator-label">WiFi Strength</div>
+                            <div class="indicator-value" id="wifiStrength">--</div>
+                        </div>
+                    </div>
+                    <div class="indicator">
+                        <div class="indicator-icon">🔋</div>
+                        <div class="indicator-text">
+                            <div class="indicator-label">Battery</div>
+                            <div class="indicator-value" id="battery">--</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="video-container">
+                    <img id="videoStream" alt="Video Stream" />
+                </div>
+                
+                <div class="controls-grid">
+                    <div class="joystick-container">
+                        <h3>Joystick</h3>
+                        <div class="joystick" id="joystick">
+                            <div class="joystick-knob" id="joystickKnob"></div>
+                        </div>
+                        <div>X: <span id="joystickX">0</span>, Y: <span id="joystickY">0</span></div>
+                    </div>
+                    
+                    <div class="depth-container">
+                        <h3>Depth: <span id="depthValue">0</span></h3>
+                        <input type="range" class="depth-slider" id="depthSlider" min="0" max="100" value="0">
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button class="control-button light-btn" id="lightBtn" onclick="toggleLight()">Light</button>
+                    <button class="control-button photo-btn" onclick="takePhoto()">Photo</button>
+                </div>
+            </div>
+            
+            <div id="system" class="tab-content">
+                <div class="system-info">
+                    <h2>System Information</h2>
+                    <p><strong>Status:</strong> Connected</p>
+                    <p><strong>WiFi:</strong> <span id="systemWifi">--</span>%</p>
+                    <p><strong>Battery:</strong> <span id="systemBattery">--</span>%</p>
+                    <p><strong>Depth:</strong> <span id="systemDepth">--</span></p>
+                    <p><strong>Light:</strong> <span id="systemLight">OFF</span></p>
+                </div>
+            </div>
+            
+            <div id="log" class="tab-content">
+                <div class="log-container">
+                    <h2>System Logs</h2>
+                    <div class="log-entries" id="logEntries"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
